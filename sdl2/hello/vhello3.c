@@ -6,17 +6,19 @@
 SDL_Window*		main_wnd = NULL;
 SDL_Renderer*		main_render = NULL;
 SDL_Texture*		main_texture = NULL;
+SDL_Texture*		lame_texture = NULL;
 
 int main() {
 	/* animation */
 	double motion_a = 0,motion_adelta = 1,motion_base = 0;
 	SDL_Rect rfirst_from,rfirst_to;
 	SDL_Rect rlast_from,rlast_to;
+	int lame_w = 0,lame_h = 0;
 	int tex_w = 0,tex_h = 0;
 	int wnd_w = 0,wnd_h = 0;
 	int redraw = 1;
 
-	Uint32 timebase = 0,timenow,drawnext = 0,time_motion_change = 0; /* in milliseconds */
+	Uint32 timebase = 0,timenow,drawnext = 0,time_motion_change = 0,lame_timebase = 0; /* in milliseconds */
 	int demo_fps = 60;
 	SDL_Event event;
 
@@ -65,6 +67,34 @@ int main() {
 			SDL_Quit();
 		}
 
+		tex_w = surf->w;
+		tex_h = surf->h;
+		SDL_FreeSurface(surf);
+	}
+
+	/* another texture, for humor */
+	{
+		SDL_Surface *surf;
+
+		if ((surf=SDL_LoadBMP("../../res/lame.bmp")) == NULL) {
+			fprintf(stderr,"SDL_LoadBMP failed. Error: %s\n",SDL_GetError());
+			SDL_Quit();
+			return 1;
+		}
+
+		/* FIXME: Okay, WHY is this necessary?? */
+		surf->format->format = SDL_PIXELFORMAT_ARGB8888;
+		surf->format->Ashift = 24;
+		surf->format->Amask = 0xFF000000;
+
+		if ((lame_texture=SDL_CreateTextureFromSurface(main_render,surf)) == NULL) {
+			fprintf(stderr,"SDL_CreateTextureFromSurface failed. Error: %s\n",SDL_GetError());
+			SDL_Quit();
+		}
+
+		lame_w = surf->w;
+		lame_h = surf->h;
+		SDL_SetTextureBlendMode(lame_texture,SDL_BLENDMODE_BLEND);
 		SDL_FreeSurface(surf);
 	}
 
@@ -75,16 +105,13 @@ int main() {
 
 	/* decide the two extremes we will animate between */
 	{
-		Uint32 fmt;
-		int acc;
-
-		SDL_QueryTexture(main_texture,&fmt,&acc,&tex_w,&tex_h);
 		SDL_GetWindowSize(main_wnd,&wnd_w,&wnd_h);
 		redraw = 1;
 	}
 
 	/* we're a demo running animation. use SDL_WaitEventTimeout to balance running animation with CPU load */
 	timebase = SDL_GetTicks();
+	lame_timebase = SDL_GetTicks();
 	while (1) {
 		if (SDL_WaitEventTimeout(&event,1000 / demo_fps)) {
 			/* SDL_QUIT: Can happen if given a signal like SIGTERM */
@@ -114,7 +141,6 @@ int main() {
 
 		timenow = SDL_GetTicks();
 		if (timenow >= drawnext) {
-			SDL_Rect rfinal_from,rfinal_to;
 			double p_motion_a = motion_a;
 
 			/* animate */
@@ -155,6 +181,8 @@ int main() {
 
 			/* need to redraw */
 			if (redraw) {
+				SDL_Rect rfinal_from,rfinal_to,r_lame;
+
 				redraw = 0;
 
 				/* from: full texture scaled to window */
@@ -183,14 +211,33 @@ int main() {
 				rfinal_to.w = rfirst_to.w + (int)((rlast_to.w - rfirst_to.w) * motion_a);
 				rfinal_to.h = rfirst_to.h + (int)((rlast_to.h - rfirst_to.h) * motion_a);
 
+				/* and the humor */
+				{
+					int anim_x = ((timenow - lame_timebase) * lame_w) / 1000;
+
+					if (anim_x > lame_w) anim_x = lame_w;
+
+					r_lame.x = wnd_w - anim_x;
+					r_lame.y = ((wnd_h - lame_h) * 7) / 8;
+					r_lame.w = lame_w;
+					r_lame.h = lame_h;
+				}
+
 				SDL_RenderClear(main_render);
+
+				SDL_SetRenderDrawBlendMode(main_render,SDL_BLENDMODE_NONE);
 				SDL_RenderCopy(main_render,main_texture,&rfinal_from,&rfinal_to);
+
+				SDL_SetRenderDrawBlendMode(main_render,SDL_BLENDMODE_BLEND);
+				SDL_RenderCopy(main_render,lame_texture,NULL,&r_lame);
+
 				SDL_RenderPresent(main_render);
 			}
 		}
 	}
 
 	/* cleanup */
+	SDL_DestroyTexture(lame_texture);
 	SDL_DestroyTexture(main_texture);
 	SDL_DestroyRenderer(main_render);
 	SDL_DestroyWindow(main_wnd);
