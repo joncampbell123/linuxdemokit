@@ -3,6 +3,7 @@
 #include <errno.h>
 
 #include <png.h>
+#include <jpeglib.h>
 
 #include "SDL2/SDL.h"
 
@@ -53,17 +54,55 @@ int main() {
 	}
 
 	/* now give it something to show.
-	 * SDL2 has a builtin BMP loader.
-	 * we have to load the BMP to a surface, then to a texture.
-	 * once it's a texture we throw away the surface. */
+	 * this time we use libjpeg to load a JPEG image. */
 	{
 		SDL_Surface *surf;
+		struct jpeg_decompress_struct decom;
+		struct jpeg_error_mgr errmgr;
+		FILE *fp;
 
-		if ((surf=SDL_LoadBMP("../../res/unhappykitten800.bmp")) == NULL) {
-			fprintf(stderr,"SDL_LoadBMP failed. Error: %s\n",SDL_GetError());
+		if ((fp=fopen("../../res/kitten1280x800.jpg","rb")) == NULL) {
+			fprintf(stderr,"Failed to open kitten1280x800.jpg, %s\n",strerror(errno));
 			SDL_Quit();
 			return 1;
 		}
+		decom.err = jpeg_std_error(&errmgr);
+		jpeg_create_decompress(&decom);
+		jpeg_stdio_src(&decom,fp);
+		jpeg_read_header(&decom,1);
+		if (decom.image_width == 0 || decom.image_height == 0) {
+			fprintf(stderr,"JPEG image has no dimensions\n");
+			SDL_Quit();
+			return 1;
+		}
+
+		/* libjpeg can decompress to 24-bit RGB */
+		if ((surf=SDL_CreateRGBSurface(0,decom.image_width,decom.image_height,24,0x000000FF,0x0000FF00,0x00FF0000,0)) == NULL) {
+			fprintf(stderr,"SDL_CreateRGBSurface failed. Error: %s\n",SDL_GetError());
+			SDL_Quit();
+			return 1;
+		}
+
+		/* convert to RGB please */
+		decom.out_color_space = JCS_RGB;
+		jpeg_start_decompress(&decom);
+
+		{
+			JSAMPARRAY rows = (JSAMPROW*)malloc(sizeof(JSAMPROW) * decom.image_height);
+			int y;
+
+			for (y=0;y < decom.image_height;y++)
+				rows[y] = (char*)surf->pixels + (y * surf->pitch);
+
+			while (decom.output_scanline < decom.image_height)
+				jpeg_read_scanlines(&decom,rows+decom.output_scanline,decom.image_height-decom.output_scanline);
+
+			free(rows);
+		}
+
+		jpeg_finish_decompress(&decom);
+		jpeg_destroy_decompress(&decom);
+		fclose(fp);
 
 		if ((main_texture=SDL_CreateTextureFromSurface(main_render,surf)) == NULL) {
 			fprintf(stderr,"SDL_CreateTextureFromSurface failed. Error: %s\n",SDL_GetError());

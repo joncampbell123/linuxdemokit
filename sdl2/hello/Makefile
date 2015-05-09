@@ -1,6 +1,6 @@
 
 # what to build
-TARGETS=vhello1 vhello2 vhello3 vhello4
+TARGETS=vhello1 vhello2 vhello3 vhello4 vhello5
 
 # how to compile/link to SDL2
 SDL2_CFLAGS=`pkg-config sdl2 --cflags`
@@ -10,13 +10,17 @@ SDL2_LIBS=`pkg-config sdl2 --libs`
 PNG_CFLAGS=`pkg-config libpng --cflags`
 PNG_LIBS=`pkg-config libpng --libs`
 
+# libjpeg
+JPEG_CFLAGS=
+JPEG_LIBS=-ljpeg
+
 LD ?= ld
 CC ?= gcc
 CXX ?= g++
 
-LDFLAGS = $(SDL2_LIBS) $(PNG_LIBS)
-CFLAGS = $(SDL2_CFLAGS) $(PNG_CFLAGS)
-CXXFLAGS = $(SDL2_CFLAGS) $(PNG_CFLAGS)
+LDFLAGS = $(SDL2_LIBS) $(PNG_LIBS) $(JPEG_LIBS)
+CFLAGS = $(SDL2_CFLAGS) $(PNG_CFLAGS) $(JPEG_CFLAGS) -g3
+CXXFLAGS = $(SDL2_CFLAGS) $(PNG_CFLAGS) $(JPEG_CFLAGS)
 
 # tell make what to do with .c and .cpp files
 .c.o:
@@ -49,5 +53,9 @@ vhello3: vhello3.o
 
 # vhello4
 vhello4: vhello4.o
+	$(CC) -o $@ $< $(LDFLAGS)
+
+# vhello5
+vhello5: vhello5.o
 	$(CC) -o $@ $< $(LDFLAGS)
 
