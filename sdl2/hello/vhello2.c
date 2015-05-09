@@ -72,13 +72,12 @@ int main() {
 				fprintf(stderr,"SDL_QUIT\n");
 				break;
 			}
-			/* can happen if user clicks "close" button in X */
 			else if (event.type == SDL_WINDOWEVENT) {
-				if (event.window.event == SDL_WINDOWEVENT_CLOSE) {
+				if (event.window.event == SDL_WINDOWEVENT_CLOSE) { /* User clicks the "X" in the Window Manager or closes the window somehow */
 					fprintf(stderr,"SDL_WINDOWEVENT/SDL_WINDOWEVENT_CLOSE\n");
 					break;
 				}
-				else if (event.window.event == SDL_WINDOWEVENT_RESIZED) {
+				else if (event.window.event == SDL_WINDOWEVENT_RESIZED) { /* User resizes the window */
 					fprintf(stderr,"SDL_WINDOWEVENT/SDL_WINDOWEVENT_RESIZED\n");
 
 					/* need to redraw */
