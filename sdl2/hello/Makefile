@@ -1,6 +1,6 @@
 
 # what to build
-TARGETS=vhello1 vhello2
+TARGETS=vhello1 vhello2 vhello3
 
 # how to compile/link to SDL2
 SDL2_CFLAGS=`pkg-config sdl2 --cflags`
@@ -33,9 +33,13 @@ distclean: clean
 
 # vhello1
 vhello1: vhello1.o
-	$(CXX) -o $@ $< $(LDFLAGS)
+	$(CC) -o $@ $< $(LDFLAGS)
 
 # vhello2
 vhello2: vhello2.o
-	$(CXX) -o $@ $< $(LDFLAGS)
+	$(CC) -o $@ $< $(LDFLAGS)
+
+# vhello3
+vhello3: vhello3.o
+	$(CC) -o $@ $< $(LDFLAGS)
 
