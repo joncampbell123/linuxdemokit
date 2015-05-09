@@ -19,7 +19,7 @@ CC ?= gcc
 CXX ?= g++
 
 LDFLAGS = $(SDL2_LIBS) $(PNG_LIBS) $(JPEG_LIBS)
-CFLAGS = $(SDL2_CFLAGS) $(PNG_CFLAGS) $(JPEG_CFLAGS) -g3
+CFLAGS = $(SDL2_CFLAGS) $(PNG_CFLAGS) $(JPEG_CFLAGS)
 CXXFLAGS = $(SDL2_CFLAGS) $(PNG_CFLAGS) $(JPEG_CFLAGS)
 
 # tell make what to do with .c and .cpp files
