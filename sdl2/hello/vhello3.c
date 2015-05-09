@@ -82,7 +82,7 @@ int main() {
 			return 1;
 		}
 
-		/* FIXME: Okay, WHY is this necessary?? */
+		/* SDL_LoadBMP disregards any alpha channel in 32bpp .bmp files. so we have to hack the surface to make alpha work. */
 		surf->format->format = SDL_PIXELFORMAT_ARGB8888;
 		surf->format->Ashift = 24;
 		surf->format->Amask = 0xFF000000;
