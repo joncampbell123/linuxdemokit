@@ -17,7 +17,7 @@ int main() {
 
 	if ((main_wnd=SDL_CreateWindow(/*const char *title*/"vhello1",/*x*/SDL_WINDOWPOS_CENTERED,
 		/*y*/SDL_WINDOWPOS_CENTERED,/*w (client area?)*/640,/*h (client area?)*/480,
-		SDL_WINDOW_SHOWN)) == NULL) {
+		SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE)) == NULL) {
 		fprintf(stderr,"SDL_CreateWindow failed. Error: %s\n",SDL_GetError());
 		SDL_Quit();
 		return 1;
@@ -77,6 +77,14 @@ int main() {
 				if (event.window.event == SDL_WINDOWEVENT_CLOSE) {
 					fprintf(stderr,"SDL_WINDOWEVENT/SDL_WINDOWEVENT_CLOSE\n");
 					break;
+				}
+				else if (event.window.event == SDL_WINDOWEVENT_RESIZED) {
+					fprintf(stderr,"SDL_WINDOWEVENT/SDL_WINDOWEVENT_RESIZED\n");
+
+					/* need to redraw */
+					SDL_RenderClear(main_render);
+					SDL_RenderCopy(main_render,main_texture,NULL,NULL);
+					SDL_RenderPresent(main_render);
 				}
 			}
 			/* allow user to hit ESC to quit */
