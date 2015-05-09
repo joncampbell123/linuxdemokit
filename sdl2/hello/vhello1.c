@@ -36,6 +36,10 @@ int main() {
 		return 1;
 	}
 
+	/* give the renderer a blank screen to show SOMETHING */
+	SDL_RenderClear(main_render);
+	SDL_RenderPresent(main_render);
+
 	/* now wait for user input.
 	 * note that if you were a demo running animations you might use SDL_PollEvent instead of blocking in SDL_WaitEvent */
 	while (1) {
