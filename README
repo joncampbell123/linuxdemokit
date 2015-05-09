@@ -2,3 +2,13 @@ Linux demo kit
 
 A set of sample code and libraries for developing demoscene productions in Linux.
 
+To use, you will need a C/C++ compiler like GCC, and GNU make. Some samples also
+use pthreads for multithreading.
+
+These samples were coded around i686 and x86_64 targets, but theoretically should
+be usable on almost any processor.
+
+---------------------------------------------------
+
+sdl2 .................................... Simple DirectMedia Layer 2.0 samples
+
