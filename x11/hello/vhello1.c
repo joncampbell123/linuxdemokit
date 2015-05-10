@@ -14,6 +14,8 @@
 #include <X11/Xutil.h>
 #include <X11/extensions/XShm.h>
 
+#include <jpeglib.h>
+
 Display*			x_display = NULL;
 Visual*				x_visual = NULL;
 Screen*				x_screen = NULL;
@@ -34,6 +36,10 @@ int				x_screen_index = 0;
 int				x_quit = 0;
 int				bitmap_width = 0;
 int				bitmap_height = 0;
+
+unsigned char*			image=NULL; /* 24bpp image */
+size_t				image_stride;
+size_t				image_width,image_height;
 
 void close_bitmap();
 
@@ -77,10 +83,10 @@ int init_shm() {
 
 	memset(x_image->data,0x00,x_image_length);
 
-	bitmap_width = x_image->width;
-	bitmap_height = x_image->height;
+	bitmap_width = x_gwa.width;
+	bitmap_height = x_gwa.height;
 	fprintf(stderr,"SHM-based XImage created\n");
-	return 0;
+	return 1;
 }
 
 int init_norm() {
@@ -111,8 +117,8 @@ int init_norm() {
 
 	memset(x_image->data,0x00,x_image_length);
 
-	bitmap_width = x_image->width;
-	bitmap_height = x_image->height;
+	bitmap_width = x_gwa.width;
+	bitmap_height = x_gwa.height;
 	fprintf(stderr,"Normal (non-SHM) XImage created\n");
 	return 1;
 }
@@ -156,6 +162,56 @@ void update_to_X11() {
 		XShmPutImage(x_display, x_window, x_gc, x_image, 0, 0, 0, 0, bitmap_width, bitmap_height, 0);
 	else
 		XPutImage(x_display, x_window, x_gc, x_image, 0, 0, 0, 0, bitmap_width, bitmap_height);
+}
+
+/* render image to XImage.
+ * stretch fit using crude nearest neighbor scaling */
+void rerender_out() {
+	unsigned char *srow;
+	unsigned char *drow;
+	int ox,oy; // in pixels
+	int sx,sy; // in 16.16 fixed point
+	int stepx;
+
+	stepx = (image_width << 16) / bitmap_width;
+	for (oy=0;oy < bitmap_height;oy++) {
+		srow = (((oy * image_height) / bitmap_height) * image_stride) + image;
+		drow = x_image->data + (x_image->bytes_per_line * oy);
+
+		if (x_image->bits_per_pixel == 32) {
+			if (x_image->blue_mask == 0x000000FF) {/*most common, ARGB*/
+				for (ox=0,sx=0;ox < bitmap_width;ox++,sx += stepx) {
+					unsigned char *s = srow + ((sx >> 16)*3);
+					*drow++ = s[2]; /* libjpeg RGB -> ARGB */
+					*drow++ = s[1];
+					*drow++ = s[0];
+					*drow++ = 0xFF; // alpha, I assume
+				}
+			}
+			else if (x_image->blue_mask == 0x00FF0000) {/*also common, ABGR*/
+				for (ox=0,sx=0;ox < bitmap_width;ox++,sx += stepx) {
+					unsigned char *s = srow + ((sx >> 16)*3);
+					*drow++ = s[0]; /* libjpeg RGB -> ABGR */
+					*drow++ = s[1];
+					*drow++ = s[2];
+					*drow++ = 0xFF; // alpha, I assume
+				}
+			}
+			else {
+				fprintf(stderr,"WARNING: unsupported ARGB channel order\n");
+				fprintf(stderr,"     rmask=0x%08x gmask=0x%08x bmask=0x%08x\n",
+					x_image->red_mask,
+					x_image->green_mask,
+					x_image->blue_mask);
+				break;
+			}
+		}
+		else {
+			fprintf(stderr,"WARNING: unsupported bit depth %u/bpp\n",
+				x_image->bits_per_pixel);
+			break;
+		}
+	}
 }
 
 int main() {
@@ -213,6 +269,54 @@ int main() {
 		}
 	}
 
+	/* decode a JPEG image for use in this program */
+	{
+		struct jpeg_decompress_struct decom;
+		struct jpeg_error_mgr errmgr;
+		FILE *fp;
+
+		if ((fp=fopen("../../res/kitten1280x800.jpg","rb")) == NULL) {
+			fprintf(stderr,"Failed to open kitten1280x800.jpg, %s\n",strerror(errno));
+			return 1;
+		}
+		decom.err = jpeg_std_error(&errmgr);
+		jpeg_create_decompress(&decom);
+		jpeg_stdio_src(&decom,fp);
+		jpeg_read_header(&decom,1);
+		if (decom.image_width == 0 || decom.image_height == 0) {
+			fprintf(stderr,"JPEG image has no dimensions\n");
+			return 1;
+		}
+
+		image_width = decom.image_width;
+		image_height = decom.image_height;
+		image_stride = ((image_width+15)&(~15)) * 3;
+		image = malloc(image_stride * image_height);
+
+		/* convert to RGB please */
+		decom.out_color_space = JCS_RGB;
+		jpeg_start_decompress(&decom);
+
+		{
+			JSAMPARRAY rows = (JSAMPROW*)malloc(sizeof(JSAMPROW) * decom.image_height);
+			int y;
+
+			for (y=0;y < decom.image_height;y++)
+				rows[y] = (char*)image + (y * image_stride);
+
+			while (decom.output_scanline < decom.image_height)
+				jpeg_read_scanlines(&decom,rows+decom.output_scanline,decom.image_height-decom.output_scanline);
+
+			free(rows);
+		}
+
+		jpeg_finish_decompress(&decom);
+		jpeg_destroy_decompress(&decom);
+		fclose(fp);
+	}
+
+	rerender_out();
+
 	/* wait for events */
 	while (!x_quit) {
 		/* you can skip XSync and go straight to XPending() if you are doing animation */
@@ -238,6 +342,8 @@ int main() {
 								return 1;
 							}
 						}
+
+						rerender_out();
 					}
 				}
 			}
@@ -270,6 +376,7 @@ int main() {
 
 	/* also a lot involved for cleanup */
 	close_bitmap();
+	free(image);
 	XDestroyWindow(x_display,x_window);
 	XCloseDisplay(x_display);
 	return 0;
