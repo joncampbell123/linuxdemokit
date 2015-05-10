@@ -11,4 +11,5 @@ be usable on almost any processor.
 ---------------------------------------------------
 
 sdl2 .................................... Simple DirectMedia Layer 2.0 samples
+x11 ..................................... X11 X/XFree86 examples (using the low level X11 library)
 
