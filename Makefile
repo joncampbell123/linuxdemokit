@@ -7,6 +7,10 @@ SUBDIRS=sdl2 x11 xcb
 all:
 	echo Please cd into a directory and build something
 
+# if you DO want to...
+everything:
+	@for i in $(SUBDIRS); do make -C $$i all || break; done
+
 # "make clean" by convention. The '@' prevents make from echoing the command
 clean:
 	@for i in $(SUBDIRS); do make -C $$i clean || break; done
