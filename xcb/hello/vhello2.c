@@ -17,6 +17,7 @@ int				xcb_screen_num = -1;
 xcb_get_geometry_reply_t*	xcb_geo = NULL;
 xcb_gcontext_t			xcb_gc = 0;
 xcb_format_t*			xcb_fmt = NULL;
+xcb_visualtype_t*		xcb_visual = NULL;
 
 int				bitmap_width = 0,bitmap_height = 0;
 int				redraw = 1;
@@ -98,7 +99,7 @@ void rerender_out() {
 		drow = bitmap + (bitmap_stride * oy);
 
 		if (xcb_fmt->bits_per_pixel == 32) {
-//			if (xcb_fmt->blue_mask == 0x000000FF) {/*most common, ARGB*/
+			if (xcb_visual->blue_mask == 0x000000FF) {/*most common, ARGB*/
 				for (ox=0,sx=0;ox < bitmap_width;ox++,sx += stepx) {
 					unsigned char *s = srow + ((sx >> 16)*3);
 					*drow++ = s[2]; /* libjpeg RGB -> ARGB */
@@ -106,9 +107,8 @@ void rerender_out() {
 					*drow++ = s[0];
 					*drow++ = 0xFF; // alpha, I assume
 				}
-//			}
-#if 0
-			else if (xcb_fmt->blue_mask == 0x00FF0000) {/*also common, ABGR*/
+			}
+			else if (xcb_visual->blue_mask == 0x00FF0000) {/*also common, ABGR*/
 				for (ox=0,sx=0;ox < bitmap_width;ox++,sx += stepx) {
 					unsigned char *s = srow + ((sx >> 16)*3);
 					*drow++ = s[0]; /* libjpeg RGB -> ABGR */
@@ -120,12 +120,11 @@ void rerender_out() {
 			else {
 				fprintf(stderr,"WARNING: unsupported ARGB channel order\n");
 				fprintf(stderr,"     rmask=0x%08x gmask=0x%08x bmask=0x%08x\n",
-					xcb_fmt->red_mask,
-					xcb_fmt->green_mask,
-					xcb_fmt->blue_mask);
+					xcb_visual->red_mask,
+					xcb_visual->green_mask,
+					xcb_visual->blue_mask);
 				break;
 			}
-#endif
 		}
 		else {
 			fprintf(stderr,"WARNING: unsupported bit depth %u/bpp\n",
@@ -168,6 +167,27 @@ int main() {
 	fprintf(stderr,"xcb_screen:\n");
 	fprintf(stderr,"   bitmap_format_scanline_unit = %u\n",xcb_setup->bitmap_format_scanline_unit);
 	fprintf(stderr,"   bitmap_format_scanline_pad = %u\n",xcb_setup->bitmap_format_scanline_pad);
+
+	/* we need the visual to tell us how the RGB is formatted */
+	{
+		xcb_depth_iterator_t depth_iter = xcb_screen_allowed_depths_iterator(xcb_screen);
+
+		for (;depth_iter.rem;xcb_depth_next(&depth_iter)) {
+			xcb_visualtype_iterator_t visual_iter = xcb_depth_visuals_iterator(depth_iter.data);
+
+			for (;visual_iter.rem;xcb_visualtype_next(&visual_iter)) {
+				if (xcb_screen->root_visual == visual_iter.data->visual_id) {
+					xcb_visual = visual_iter.data;
+					break;
+				}
+			}
+		}
+
+		if (xcb_visual == NULL) {
+			fprintf(stderr,"Unable to determine visual\n");
+			return 1;
+		}
+	}
 
 	/* pick a format */
 	{
