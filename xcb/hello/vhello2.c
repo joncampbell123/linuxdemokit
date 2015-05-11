@@ -13,32 +13,40 @@ const xcb_setup_t*		xcb_setup = NULL;
 int				xcb_screen_num = -1;
 xcb_get_geometry_reply_t*	xcb_geo = NULL;
 xcb_gcontext_t			xcb_gc = 0;
+xcb_format_t*			xcb_fmt = NULL;
 
-xcb_pixmap_t			xcb_pixmap = 0;
 int				bitmap_width = 0,bitmap_height = 0;
 int				redraw = 1;
 
-void init_bitmap() {
-	if (xcb_pixmap != 0)
-		return;
+unsigned char*			bitmap = NULL;
+size_t				bitmap_stride = 0;
+size_t				bitmap_size = 0;
 
+void init_bitmap() {
 	if (xcb_geo == NULL)
 		return;
 
-	bitmap_width = (xcb_geo->width+15)&(~15);
-	bitmap_height = (xcb_geo->height+15)&(~15);
-
-	xcb_pixmap = xcb_generate_id(xcb_connection);
-	xcb_create_pixmap(xcb_connection, xcb_screen->root_depth, xcb_pixmap, xcb_window, bitmap_width, bitmap_height);
-
 	bitmap_width = xcb_geo->width;
 	bitmap_height = xcb_geo->height;
+
+	/* local bitmap */
+	bitmap_stride = bitmap_width * xcb_fmt->bits_per_pixel;
+	bitmap_stride += xcb_fmt->scanline_pad - 1;
+	bitmap_stride -= bitmap_stride % xcb_fmt->scanline_pad;
+	bitmap_stride >>= 3;
+	bitmap_size = bitmap_stride * bitmap_height;
+
+	fprintf(stderr,"BMP is %u x %u stride=%zu size=%zu depth=%u\n",
+		bitmap_width, bitmap_height, bitmap_stride, bitmap_size, xcb_fmt->depth);
+
+	bitmap = malloc(bitmap_size);
 }
 
 void free_bitmap() {
-	if (xcb_pixmap != 0) {
-		xcb_free_pixmap(xcb_connection, xcb_pixmap);
-		xcb_pixmap = 0;
+	if (bitmap) {
+		free(bitmap);
+		bitmap = NULL;
+		bitmap_size = 0;
 	}
 }
 
@@ -66,6 +74,21 @@ void freeall() {
 	}
 }
 
+void redraw_image() {
+	if (bitmap == NULL) return;
+
+	memset(bitmap,rand(),bitmap_size);
+
+	/* FIXME: Z_PIXMAP?!?!?? Why not XY_PIXMAP???
+	 *        "Z_PIXMAP" leads me to believe it's something to do with a Z buffer!
+	 *        If you try XY_PIXMAP the function will just render it like a 1-bit monochromatic
+	 *        bitmap! What fucking sense does that make?!?!?!?!? AAARRRRRGH!
+	 *        It doesn't help that NONE of this shit is documented! */
+	xcb_put_image(xcb_connection, XCB_IMAGE_FORMAT_Z_PIXMAP, xcb_window, xcb_gc,
+		bitmap_width, bitmap_height, 0, 0, /*left pad??*/0, xcb_fmt->depth,
+		bitmap_size, bitmap);
+}
+
 int main() {
 	/* WARNING: a lot is involved at the XCB low level interface */
 
@@ -84,6 +107,26 @@ int main() {
 	if ((xcb_screen=(xcb_setup_roots_iterator(xcb_setup)).data) == NULL) {
 		fprintf(stderr,"Cannot get XCB screen\n");
 		return 1;
+	}
+
+	/* dump the values. we're guessing with this shit. nobody fucking documents what the fuck "bitmap_format_scanline_unit" means. >:( */
+	fprintf(stderr,"xcb_screen:\n");
+	fprintf(stderr,"   bitmap_format_scanline_unit = %u\n",xcb_setup->bitmap_format_scanline_unit);
+	fprintf(stderr,"   bitmap_format_scanline_pad = %u\n",xcb_setup->bitmap_format_scanline_pad);
+
+	/* pick a format */
+	{
+		xcb_format_t *f = xcb_setup_pixmap_formats(xcb_setup);
+		xcb_format_t *fend = f + xcb_setup_pixmap_formats_length(xcb_setup); /* !!! Wait, is the "length" in entries or in bytes?? xcb_image devs don't remember C/C++ pointer math type rules?? */
+		for (;f < fend;f++) {
+			fprintf(stderr,"  format bpp=%u scanline_pad=%u depth=%u\n",
+				f->bits_per_pixel,
+				f->scanline_pad,
+				f->depth);
+
+			if (f->depth == xcb_screen->root_depth)
+				xcb_fmt = f;
+		}
 	}
 
 	xcb_window = xcb_generate_id(xcb_connection);
@@ -118,17 +161,19 @@ int main() {
 
 	{
 		uint32_t mask;
-		uint32_t values[2];
+		uint32_t values[3];
 
-		mask = XCB_GC_FOREGROUND;
+		mask = XCB_GC_FOREGROUND | XCB_GC_BACKGROUND;
 		values[0] = xcb_screen->black_pixel;
-		values[1] = 0;
+		values[1] = xcb_screen->white_pixel;
+		values[2] = 0;
 
 		xcb_gc = xcb_generate_id(xcb_connection);
 		xcb_create_gc(xcb_connection, xcb_gc, xcb_window, mask, values);
 	}
 
 	init_bitmap();
+	redraw_image();
 
 	/* use xcb_poll_event() if you want to do animation at the same time */
 	while ((xcb_event=xcb_wait_for_event(xcb_connection)) != NULL) {
@@ -147,6 +192,7 @@ int main() {
 			if (pw != xcb_geo->width || ph != xcb_geo->height) {
 				free_bitmap();
 				init_bitmap();
+				redraw_image();
 				redraw = 1;
 			}
 		}
@@ -171,18 +217,25 @@ int main() {
 				break;
 			}
 		}
+		else if (etype == 0) {
+			/* FIXME: Is this right?? Do I just typecast as xcb_generic_error_t?? What does error->error_code mean??? Is it the same as the
+			 * error codes in X11? Is error code 8 == BadMatch or does XCB have it's own error codes???
+			 * Nobody fucking documents this shit. So as far as I know, this is how you read back error codes. */
+			xcb_generic_error_t *error = (xcb_generic_error_t*)xcb_event;
+			fprintf(stderr,"Error err=%u major=%u minor=%u\n",error->error_code,
+				error->major_code,error->minor_code);
+		}
 
 		free(xcb_event);
 		xcb_event = NULL;
 
 		if (redraw) {
 			redraw = 0;
-			xcb_copy_area(xcb_connection, xcb_pixmap, xcb_window, xcb_gc, 0, 0, 0, 0, bitmap_width, bitmap_height);
 		}
 	}
 
 	freeall();
-	xcb_free_gc(xcb_connection,xcb_gc);
+	xcb_free_gc(xcb_connection, xcb_gc);
 	xcb_disconnect(xcb_connection);
 	return 0;
 }
