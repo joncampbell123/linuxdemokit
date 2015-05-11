@@ -50,6 +50,14 @@ int main() {
 			640, 480, /*border width*/10, XCB_WINDOW_CLASS_INPUT_OUTPUT, xcb_screen->root_visual, mask, values);
 	}
 
+	{
+		const char *title = "Hello world";
+
+		xcb_change_property(xcb_connection, XCB_PROP_MODE_REPLACE, xcb_window,
+			XCB_ATOM_WM_NAME, XCB_ATOM_STRING, /*format=*/8/*<-FIXME: What does this mean?? 8 bytes/char?*/,
+			strlen(title), title);
+	}
+
 	xcb_map_window(xcb_connection, xcb_window);
 	xcb_flush(xcb_connection);
 
