@@ -43,6 +43,8 @@ void free_bitmap();
 void init_bitmap() {
 	if (xcb_geo == NULL)
 		return;
+	if (bitmap_shmid >= 0)
+		return;
 
 	bitmap_width = xcb_geo->width;
 	bitmap_height = xcb_geo->height;

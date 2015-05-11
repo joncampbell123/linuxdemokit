@@ -33,6 +33,8 @@ size_t				image_width,image_height;
 void init_bitmap() {
 	if (xcb_geo == NULL)
 		return;
+	if (bitmap != NULL)
+		return;
 
 	bitmap_width = xcb_geo->width;
 	bitmap_height = xcb_geo->height;
