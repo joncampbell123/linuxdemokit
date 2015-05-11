@@ -191,15 +191,14 @@ int main() {
 
 	{
 		uint32_t mask;
-		uint32_t values[3];
+		uint32_t values[2];
 
-		mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
-		values[0] = xcb_screen->white_pixel;
-		values[1] =	XCB_EVENT_MASK_EXPOSURE       | XCB_EVENT_MASK_BUTTON_PRESS   |
+		mask = XCB_CW_EVENT_MASK;
+		values[0] =	XCB_EVENT_MASK_EXPOSURE       | XCB_EVENT_MASK_BUTTON_PRESS   |
 				XCB_EVENT_MASK_BUTTON_RELEASE | XCB_EVENT_MASK_POINTER_MOTION |
 				XCB_EVENT_MASK_ENTER_WINDOW   | XCB_EVENT_MASK_LEAVE_WINDOW   |
 				XCB_EVENT_MASK_KEY_PRESS      | XCB_EVENT_MASK_KEY_RELEASE;
-		values[2] = 0;
+		values[1] = 0;
 
 		xcb_create_window(xcb_connection, /*depth*/0, /*window id*/xcb_window, /*parent window*/xcb_screen->root, /*x*/0, /*y*/ 0,
 			640, 480, /*border width*/10, XCB_WINDOW_CLASS_INPUT_OUTPUT, xcb_screen->root_visual, mask, values);
