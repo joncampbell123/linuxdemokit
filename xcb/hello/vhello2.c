@@ -134,15 +134,6 @@ void rerender_out() {
 			break;
 		}
 	}
-
-	/* FIXME: Z_PIXMAP?!?!?? Why not XY_PIXMAP???
-	 *        "Z_PIXMAP" leads me to believe it's something to do with a Z buffer!
-	 *        If you try XY_PIXMAP the function will just render it like a 1-bit monochromatic
-	 *        bitmap! What fucking sense does that make?!?!?!?!? AAARRRRRGH!
-	 *        It doesn't help that NONE of this shit is documented! */
-	xcb_put_image(xcb_connection, XCB_IMAGE_FORMAT_Z_PIXMAP, xcb_window, xcb_gc,
-		bitmap_width, bitmap_height, 0, 0, /*left pad??*/0, xcb_fmt->depth,
-		bitmap_size, bitmap);
 }
 
 int main() {
@@ -355,6 +346,17 @@ int main() {
 		xcb_event = NULL;
 
 		if (redraw) {
+			if (bitmap != NULL) {
+				/* FIXME: Z_PIXMAP?!?!?? Why not XY_PIXMAP???
+				 *        "Z_PIXMAP" leads me to believe it's something to do with a Z buffer!
+				 *        If you try XY_PIXMAP the function will just render it like a 1-bit monochromatic
+				 *        bitmap! What fucking sense does that make?!?!?!?!? AAARRRRRGH!
+				 *        It doesn't help that NONE of this shit is documented! */
+				xcb_put_image(xcb_connection, XCB_IMAGE_FORMAT_Z_PIXMAP, xcb_window, xcb_gc,
+					bitmap_width, bitmap_height, 0, 0, /*left pad??*/0, xcb_fmt->depth,
+					bitmap_size, bitmap);
+			}
+
 			redraw = 0;
 		}
 	}
