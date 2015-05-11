@@ -60,7 +60,7 @@ int main() {
 
 	{
 		uint32_t mask;
-		uint32_t values[2];
+		uint32_t values[3];
 
 		mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
 		values[0] = xcb_screen->white_pixel;

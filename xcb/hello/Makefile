@@ -1,6 +1,6 @@
 
 # what to build
-TARGETS=vhello1
+TARGETS=vhello1 vhello2
 
 # how to compile/link to XCB
 XCB_CFLAGS=`pkg-config xcb --cflags` `pkg-config xcb-shm --cflags` 
@@ -41,5 +41,9 @@ distclean: clean
 
 # vhello1
 vhello1: vhello1.o
+	$(CC) -o $@ $< $(LDFLAGS)
+
+# vhello2
+vhello2: vhello2.o
 	$(CC) -o $@ $< $(LDFLAGS)
 
