@@ -1,9 +1,12 @@
 
 #include <stdio.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include <xcb/xcb.h>
+
+#include <jpeglib.h>
 
 xcb_connection_t*		xcb_connection = NULL;
 xcb_screen_t*			xcb_screen = NULL;
@@ -21,6 +24,10 @@ int				redraw = 1;
 unsigned char*			bitmap = NULL;
 size_t				bitmap_stride = 0;
 size_t				bitmap_size = 0;
+
+unsigned char*			image=NULL; /* 24bpp image */
+size_t				image_stride;
+size_t				image_width,image_height;
 
 void init_bitmap() {
 	if (xcb_geo == NULL)
@@ -74,10 +81,58 @@ void freeall() {
 	}
 }
 
-void redraw_image() {
+/* render image to XImage.
+ * stretch fit using crude nearest neighbor scaling */
+void rerender_out() {
+	unsigned char *srow;
+	unsigned char *drow;
+	int ox,oy; // in pixels
+	int sx,sy; // in 16.16 fixed point
+	int stepx;
+
 	if (bitmap == NULL) return;
 
-	memset(bitmap,rand(),bitmap_size);
+	stepx = (image_width << 16) / bitmap_width;
+	for (oy=0;oy < bitmap_height;oy++) {
+		srow = (((oy * image_height) / bitmap_height) * image_stride) + image;
+		drow = bitmap + (bitmap_stride * oy);
+
+		if (xcb_fmt->bits_per_pixel == 32) {
+//			if (xcb_fmt->blue_mask == 0x000000FF) {/*most common, ARGB*/
+				for (ox=0,sx=0;ox < bitmap_width;ox++,sx += stepx) {
+					unsigned char *s = srow + ((sx >> 16)*3);
+					*drow++ = s[2]; /* libjpeg RGB -> ARGB */
+					*drow++ = s[1];
+					*drow++ = s[0];
+					*drow++ = 0xFF; // alpha, I assume
+				}
+//			}
+#if 0
+			else if (xcb_fmt->blue_mask == 0x00FF0000) {/*also common, ABGR*/
+				for (ox=0,sx=0;ox < bitmap_width;ox++,sx += stepx) {
+					unsigned char *s = srow + ((sx >> 16)*3);
+					*drow++ = s[0]; /* libjpeg RGB -> ABGR */
+					*drow++ = s[1];
+					*drow++ = s[2];
+					*drow++ = 0xFF; // alpha, I assume
+				}
+			}
+			else {
+				fprintf(stderr,"WARNING: unsupported ARGB channel order\n");
+				fprintf(stderr,"     rmask=0x%08x gmask=0x%08x bmask=0x%08x\n",
+					xcb_fmt->red_mask,
+					xcb_fmt->green_mask,
+					xcb_fmt->blue_mask);
+				break;
+			}
+#endif
+		}
+		else {
+			fprintf(stderr,"WARNING: unsupported bit depth %u/bpp\n",
+				xcb_fmt->bits_per_pixel);
+			break;
+		}
+	}
 
 	/* FIXME: Z_PIXMAP?!?!?? Why not XY_PIXMAP???
 	 *        "Z_PIXMAP" leads me to believe it's something to do with a Z buffer!
@@ -124,6 +179,9 @@ int main() {
 				f->scanline_pad,
 				f->depth);
 
+			/* despite all the formats listed, only the same depth as the screen will work. */
+			/* note that even for modern screens you'll see entries listed like "depth=24 bpp=32 scanline_pad=32".
+			 * you'll also see an entry for depth=32. don't use it. it doesn't work (not that I could accomplish anyway). */
 			if (f->depth == xcb_screen->root_depth)
 				xcb_fmt = f;
 		}
@@ -172,8 +230,54 @@ int main() {
 		xcb_create_gc(xcb_connection, xcb_gc, xcb_window, mask, values);
 	}
 
+	/* decode a JPEG image for use in this program */
+	{
+		struct jpeg_decompress_struct decom;
+		struct jpeg_error_mgr errmgr;
+		FILE *fp;
+
+		if ((fp=fopen("../../res/kitten1280x800.jpg","rb")) == NULL) {
+			fprintf(stderr,"Failed to open kitten1280x800.jpg, %s\n",strerror(errno));
+			return 1;
+		}
+		decom.err = jpeg_std_error(&errmgr);
+		jpeg_create_decompress(&decom);
+		jpeg_stdio_src(&decom,fp);
+		jpeg_read_header(&decom,1);
+		if (decom.image_width == 0 || decom.image_height == 0) {
+			fprintf(stderr,"JPEG image has no dimensions\n");
+			return 1;
+		}
+
+		image_width = decom.image_width;
+		image_height = decom.image_height;
+		image_stride = ((image_width+15)&(~15)) * 3;
+		image = malloc(image_stride * image_height);
+
+		/* convert to RGB please */
+		decom.out_color_space = JCS_RGB;
+		jpeg_start_decompress(&decom);
+
+		{
+			JSAMPARRAY rows = (JSAMPROW*)malloc(sizeof(JSAMPROW) * decom.image_height);
+			int y;
+
+			for (y=0;y < decom.image_height;y++)
+				rows[y] = (char*)image + (y * image_stride);
+
+			while (decom.output_scanline < decom.image_height)
+				jpeg_read_scanlines(&decom,rows+decom.output_scanline,decom.image_height-decom.output_scanline);
+
+			free(rows);
+		}
+
+		jpeg_finish_decompress(&decom);
+		jpeg_destroy_decompress(&decom);
+		fclose(fp);
+	}
+
 	init_bitmap();
-	redraw_image();
+	rerender_out();
 
 	/* use xcb_poll_event() if you want to do animation at the same time */
 	while ((xcb_event=xcb_wait_for_event(xcb_connection)) != NULL) {
@@ -192,7 +296,7 @@ int main() {
 			if (pw != xcb_geo->width || ph != xcb_geo->height) {
 				free_bitmap();
 				init_bitmap();
-				redraw_image();
+				rerender_out();
 				redraw = 1;
 			}
 		}
@@ -235,6 +339,7 @@ int main() {
 	}
 
 	freeall();
+	free(image);
 	xcb_free_gc(xcb_connection, xcb_gc);
 	xcb_disconnect(xcb_connection);
 	return 0;
