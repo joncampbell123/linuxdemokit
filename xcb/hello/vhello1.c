@@ -11,6 +11,30 @@ xcb_window_t			xcb_window = NULL;
 xcb_generic_event_t*		xcb_event = NULL;
 const xcb_setup_t*		xcb_setup = NULL;
 int				xcb_screen_num = -1;
+xcb_get_geometry_reply_t*	xcb_geo = NULL;
+
+void update_xcb_geo() {
+	xcb_get_geometry_cookie_t x;
+
+	if (xcb_geo != NULL) {
+		free(xcb_geo);
+		xcb_geo = NULL;
+	}
+
+	x = xcb_get_geometry(xcb_connection, xcb_window);
+	xcb_geo = xcb_get_geometry_reply(xcb_connection, x, NULL);
+
+	if (xcb_geo) {
+		fprintf(stderr,"Window is now %u x %u\n",xcb_geo->width,xcb_geo->height);
+	}
+}
+
+void freeall() {
+	if (xcb_geo != NULL) {
+		free(xcb_geo);
+		xcb_geo = NULL;
+	}
+}
 
 int main() {
 	/* WARNING: a lot is involved at the XCB low level interface */
@@ -60,6 +84,7 @@ int main() {
 
 	xcb_map_window(xcb_connection, xcb_window);
 	xcb_flush(xcb_connection);
+	update_xcb_geo();
 
 	/* use xcb_poll_event() if you want to do animation at the same time */
 	while ((xcb_event=xcb_wait_for_event(xcb_connection)) != NULL) {
@@ -69,6 +94,8 @@ int main() {
 
 		if (etype == XCB_EXPOSE) {
 			fprintf(stderr,"Expose event\n");
+
+			update_xcb_geo();
 		}
 		else if (etype == XCB_KEY_PRESS) {
 			xcb_key_press_event_t *ev = (xcb_key_press_event_t*)xcb_event;
@@ -96,6 +123,7 @@ int main() {
 		xcb_event = NULL;
 	}
 
+	freeall();
 	xcb_disconnect(xcb_connection);
 	return 0;
 }
