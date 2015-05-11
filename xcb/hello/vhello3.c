@@ -166,16 +166,6 @@ void rerender_out() {
 			break;
 		}
 	}
-
-	/* FIXME: Z_PIXMAP?!?!?? Why not XY_PIXMAP???
-	 *        "Z_PIXMAP" leads me to believe it's something to do with a Z buffer!
-	 *        If you try XY_PIXMAP the function will just render it like a 1-bit monochromatic
-	 *        bitmap! What fucking sense does that make?!?!?!?!? AAARRRRRGH!
-	 *        It doesn't help that NONE of this shit is documented! */
-	xcb_shm_put_image(xcb_connection, xcb_window, xcb_gc,
-		/*total width*/bitmap_width, /*total height*/bitmap_height, /*src x*/0, /*src y*/0,
-		/*src width*/bitmap_width, /*src height*/bitmap_height, /*dst x*/0, /*dst y*/0,
-		xcb_fmt->depth, XCB_IMAGE_FORMAT_Z_PIXMAP, /*send event (image write is complete)*/0, xcb_shm, /*offset*/0);
 }
 
 int main() {
@@ -332,6 +322,7 @@ int main() {
 
 	init_bitmap();
 	rerender_out();
+	redraw = 1;
 
 	/* use xcb_poll_event() if you want to do animation at the same time */
 	while ((xcb_event=xcb_wait_for_event(xcb_connection)) != NULL) {
@@ -388,6 +379,20 @@ int main() {
 		xcb_event = NULL;
 
 		if (redraw) {
+			fprintf(stderr,"Redraw\n");
+			if (bitmap_shmid >= 0) {
+				/* FIXME: Z_PIXMAP?!?!?? Why not XY_PIXMAP???
+				 *        "Z_PIXMAP" leads me to believe it's something to do with a Z buffer!
+				 *        If you try XY_PIXMAP the function will just render it like a 1-bit monochromatic
+				 *        bitmap! What fucking sense does that make?!?!?!?!? AAARRRRRGH!
+				 *        It doesn't help that NONE of this shit is documented! */
+				xcb_shm_put_image(xcb_connection, xcb_window, xcb_gc,
+					/*total width*/bitmap_width, /*total height*/bitmap_height, /*src x*/0, /*src y*/0,
+					/*src width*/bitmap_width, /*src height*/bitmap_height, /*dst x*/0, /*dst y*/0,
+					xcb_fmt->depth, XCB_IMAGE_FORMAT_Z_PIXMAP, /*send event (image write is complete)*/0, xcb_shm, /*offset*/0);
+				xcb_flush(xcb_connection);
+			}
+
 			redraw = 0;
 		}
 	}

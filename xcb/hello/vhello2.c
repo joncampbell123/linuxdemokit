@@ -355,6 +355,7 @@ int main() {
 				xcb_put_image(xcb_connection, XCB_IMAGE_FORMAT_Z_PIXMAP, xcb_window, xcb_gc,
 					bitmap_width, bitmap_height, 0, 0, /*left pad??*/0, xcb_fmt->depth,
 					bitmap_size, bitmap);
+				xcb_flush(xcb_connection);
 			}
 
 			redraw = 0;
